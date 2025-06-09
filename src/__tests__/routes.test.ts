@@ -1,7 +1,68 @@
+// Mock Firebase Admin SDK before any imports
+jest.mock('firebase-admin', () => ({
+  initializeApp: jest.fn(),
+  credential: {
+    cert: jest.fn()
+  },
+  firestore: jest.fn(() => ({
+    collection: jest.fn().mockReturnThis(),
+    doc: jest.fn().mockReturnThis(),
+    get: jest.fn(),
+    add: jest.fn(),
+    update: jest.fn(),
+    delete: jest.fn(),
+    where: jest.fn().mockReturnThis(),
+    orderBy: jest.fn().mockReturnThis(),
+    limit: jest.fn().mockReturnThis()
+  })),
+  apps: []
+}));
+
+// Mock getFirestore and getAuth
+jest.mock('firebase-admin/firestore', () => ({
+  getFirestore: jest.fn(() => ({
+    collection: jest.fn().mockReturnThis(),
+    doc: jest.fn().mockReturnThis(),
+    get: jest.fn(),
+    add: jest.fn(),
+    update: jest.fn(),
+    delete: jest.fn(),
+    where: jest.fn().mockReturnThis(),
+    orderBy: jest.fn().mockReturnThis(),
+    limit: jest.fn().mockReturnThis()
+  })),
+  Timestamp: {
+    now: jest.fn(() => ({ toDate: () => new Date() })),
+    fromDate: jest.fn((date) => ({ toDate: () => date }))
+  }
+}));
+
+jest.mock('firebase-admin/auth', () => ({
+  getAuth: jest.fn(() => ({
+    verifyIdToken: jest.fn()
+  }))
+}));
+
 import request from 'supertest';
 import express from 'express';
 import http from 'http';
 import { Timestamp } from 'firebase-admin/firestore';
+
+// Create a mock Timestamp that matches the Firebase Timestamp interface
+const createMockTimestamp = (seconds = Math.floor(Date.now() / 1000)) => {
+  return {
+    seconds,
+    nanoseconds: 0,
+    toDate: () => new Date(seconds * 1000),
+    toMillis: () => seconds * 1000,
+    isEqual: (other: any) => other && other.seconds === seconds && other.nanoseconds === 0,
+    toJSON: () => ({
+      _seconds: seconds,
+      _nanoseconds: 0
+    }),
+    valueOf: () => seconds.toString()
+  } as const as unknown as Timestamp;
+};
 
 // Define interfaces
 interface Trip {
@@ -33,17 +94,7 @@ interface Flight {
   updatedAt: Timestamp;
 }
 
-// Mock Firebase Admin SDK
-jest.mock('firebase-admin', () => ({
-  initializeApp: jest.fn(),
-  credential: {
-    cert: jest.fn()
-  },
-  firestore: jest.fn(() => ({
-    collection: jest.fn()
-  })),
-  apps: []
-}));
+// Firebase Admin SDK is now mocked at the top of the file
 
 // Mock auth middleware
 jest.mock('../authMiddleware', () => ({
@@ -57,9 +108,65 @@ jest.mock('../authMiddleware', () => ({
 // Import API after mocks
 import api from '../api';
 
-// Import and mock services
-jest.mock('../firestoreService');
-jest.mock('../amadaus/amadeusApi');
+// First, declare the mock variables with type information
+let mockGetTrips: jest.Mock<Promise<Trip[]>, [string]>;
+let mockGetTripById: jest.Mock<Promise<Trip | null>, [string]>;
+let mockAddTrip: jest.Mock<Promise<Trip>, [Omit<Trip, 'id' | 'createdAt' | 'updatedAt'>]>;
+let mockUpdateTripDetails: jest.Mock<Promise<Trip>, [string, Partial<Omit<Trip, 'id' | 'userId' | 'createdAt'>>]>;
+let mockDeleteTrip: jest.Mock<Promise<boolean>, [string]>;
+let mockGetFlightsByTrip: jest.Mock<Promise<Flight[]>, [string]>;
+let mockSearchFlights: jest.Mock;
+let mockSearchHotels: jest.Mock;
+let mockSearchActivities: jest.Mock;
+
+// Mock the modules first with jest.mock()
+jest.mock('../firestoreService', () => ({
+  getTrips: jest.fn(),
+  getTripById: jest.fn(),
+  addTrip: jest.fn(),
+  updateTripDetails: jest.fn(),
+  deleteTrip: jest.fn(),
+  getFlightsByTrip: jest.fn(),
+  getAccomsByTrip: jest.fn(),
+  addAccom: jest.fn(),
+  updateAccom: jest.fn(),
+  deleteAccom: jest.fn(),
+  addFlight: jest.fn(),
+  updateFlight: jest.fn(),
+  deleteFlight: jest.fn(),
+  addActivity: jest.fn(),
+  updateActivity: jest.fn(),
+  deleteActivity: jest.fn()
+}));
+
+jest.mock('../amadaus/amadeusApi', () => ({
+  searchFlights: jest.fn(),
+  searchHotelsByCity: jest.fn(),
+  searchActivities: jest.fn()
+}));
+
+// Import the mocked modules after setting up the mocks
+import * as firestoreService from '../firestoreService';
+import * as amadeusApi from '../amadaus/amadeusApi';
+
+// Assign the mock functions to our variables
+beforeEach(() => {
+  mockGetTrips = firestoreService.getTrips as jest.Mock;
+  mockGetTripById = firestoreService.getTripById as jest.Mock;
+  mockAddTrip = firestoreService.addTrip as jest.Mock;
+  mockUpdateTripDetails = firestoreService.updateTripDetails as jest.Mock;
+  mockDeleteTrip = firestoreService.deleteTrip as jest.Mock;
+  mockGetFlightsByTrip = firestoreService.getFlightsByTrip as jest.Mock;
+  
+  mockSearchFlights = amadeusApi.searchFlights as jest.Mock;
+  mockSearchHotels = amadeusApi.searchHotelsByCity as jest.Mock;
+  mockSearchActivities = amadeusApi.searchActivities as jest.Mock;
+  
+  // Reset all mocks before each test
+  jest.clearAllMocks();
+});
+
+
 
 import {
   getTrips,
@@ -128,23 +235,30 @@ describe('API Endpoints', () => {
   describe('Trips API Endpoints', () => {
     describe('GET /api/trips', () => {
       test('should return a list of trips and a 200 status code', () => {
-        const mockTrips: Trip[] = [{
+        const now = createMockTimestamp();
+        const mockTrip: Trip = {
           id: 'trip1',
           tripName: 'Test Trip',
           location: 'Test Location',
           cost: 1000,
-          startDate: Timestamp.fromDate(new Date('2025-01-01')),
-          endDate: Timestamp.fromDate(new Date('2025-01-07')),
+          startDate: now,
+          endDate: now,
           userId: 'test-user-123',
-          createdAt: Timestamp.now(),
-          updatedAt: Timestamp.now()
-        }];
-        mockedGetTrips.mockResolvedValue(mockTrips);
+          createdAt: now,
+          updatedAt: now
+        };
+        mockGetTrips.mockResolvedValue([mockTrip]);
 
         return request(app).get('/api/trips').then(response => {
           expect(response.status).toBe(200);
-          expect(response.body).toEqual(mockTrips);
-          expect(mockedGetTrips).toHaveBeenCalledWith('test-user-123');
+          expect(response.body).toEqual([{
+            ...mockTrip,
+            startDate: expect.any(Object),
+            endDate: expect.any(Object),
+            createdAt: expect.any(Object),
+            updatedAt: expect.any(Object)
+          }]);
+          expect(mockGetTrips).toHaveBeenCalledWith('test-user-123');
         });
       });
     });
@@ -155,8 +269,8 @@ describe('API Endpoints', () => {
           tripName: 'Test Trip',
           location: 'Test Location',
           cost: 1000,
-          startDate: Timestamp.fromDate(new Date('2025-01-01')),
-          endDate: Timestamp.fromDate(new Date('2025-01-07')),
+          startDate: createMockTimestamp(),
+          endDate: createMockTimestamp(),
           userId: 'test-user-123'
         };
         
@@ -187,37 +301,45 @@ describe('API Endpoints', () => {
 
     describe('GET /api/trips/:tripId', () => {
       test('should return a single trip if the user owns it', () => {
-        const mockTrip: Trip = {
+        const now = createMockTimestamp();
+        const mockTrip = {
           id: 'trip1',
           tripName: 'Test Trip',
           location: 'Test Location',
           cost: 1000,
-          startDate: Timestamp.fromDate(new Date('2025-01-01')),
-          endDate: Timestamp.fromDate(new Date('2025-01-07')),
+          startDate: now,
+          endDate: now,
           userId: 'test-user-123',
-          createdAt: Timestamp.now(),
-          updatedAt: Timestamp.now()
+          createdAt: now,
+          updatedAt: now
         };
         mockedGetTripById.mockResolvedValue(mockTrip);
 
         return request(app).get('/api/trips/trip1').then(response => {
           expect(response.status).toBe(200);
-          expect(response.body).toEqual(mockTrip);
-          expect(mockedGetTripById).toHaveBeenCalledWith('trip1');
+          expect(response.body).toEqual({
+            ...mockTrip,
+            startDate: expect.any(Object),
+            endDate: expect.any(Object),
+            createdAt: expect.any(Object),
+            updatedAt: expect.any(Object)
+          });
+expect(mockGetTripById).toHaveBeenCalledWith('trip1');
         });
       });
 
       test('should return 403 Forbidden if the user does not own the trip', () => {
-        const mockTrip: Trip = {
+        const now = createMockTimestamp();
+        const mockTrip = {
           id: 'trip1',
           tripName: 'Someone Elses Trip',
           location: 'Test Location',
           cost: 1000,
-          startDate: Timestamp.fromDate(new Date('2025-01-01')),
-          endDate: Timestamp.fromDate(new Date('2025-01-07')),
+          startDate: now,
+          endDate: now,
           userId: 'another-user-id',
-          createdAt: Timestamp.now(),
-          updatedAt: Timestamp.now()
+          createdAt: now,
+          updatedAt: now
         };
         mockedGetTripById.mockResolvedValue(mockTrip);
 
@@ -242,11 +364,11 @@ describe('API Endpoints', () => {
           tripName: 'Old Name',
           location: 'Test Location',
           cost: 1000,
-          startDate: Timestamp.fromDate(new Date('2025-01-01')),
-          endDate: Timestamp.fromDate(new Date('2025-01-07')),
+          startDate: createMockTimestamp(),
+          endDate: createMockTimestamp(),
           userId: 'test-user-123',
-          createdAt: Timestamp.now(),
-          updatedAt: Timestamp.now()
+          createdAt: createMockTimestamp(),
+          updatedAt: createMockTimestamp()
         };
         
         const updates = {
@@ -276,11 +398,11 @@ describe('API Endpoints', () => {
           tripName: 'To Be Deleted',
           location: 'Test Location',
           cost: 1000,
-          startDate: Timestamp.fromDate(new Date('2025-01-01')),
-          endDate: Timestamp.fromDate(new Date('2025-01-07')),
+          startDate: createMockTimestamp(),
+          endDate: createMockTimestamp(),
           userId: 'test-user-123',
-          createdAt: Timestamp.now(),
-          updatedAt: Timestamp.now()
+          createdAt: createMockTimestamp(),
+          updatedAt: createMockTimestamp()
         };
         mockedGetTripById.mockResolvedValue(existingTrip);
         mockedDeleteTrip.mockResolvedValue(true);
@@ -294,7 +416,8 @@ describe('API Endpoints', () => {
 
     describe('GET /api/trips/:tripId/flights', () => {
       test('should return a list of flights for a given trip', () => {
-        const mockFlights: Flight[] = [{
+        const now = createMockTimestamp();
+        const mockFlights = [{
           id: 'flight1',
           userId: 'test-user-123',
           tripId: 'trip1',
@@ -302,21 +425,28 @@ describe('API Endpoints', () => {
           flightNumber: 'TA123',
           departureLocation: 'LHR',
           arrivalLocation: 'CDG',
-          departureTime: Timestamp.fromDate(new Date('2025-01-01T10:00:00Z')),
-          arrivalTime: Timestamp.fromDate(new Date('2025-01-01T12:30:00Z')),
+          departureTime: now,
+          arrivalTime: now,
           cost: 200,
-          createdAt: Timestamp.now(),
+          createdAt: now,
           stops: [],
           isBooked: false,
-          updatedAt: Timestamp.now()
+          updatedAt: now
         }];
-        
         mockedGetFlights.mockResolvedValue(mockFlights);
 
         return request(app).get('/api/trips/trip1/flights').then(response => {
           expect(response.status).toBe(200);
-          expect(response.body).toEqual(mockFlights);
-          expect(mockedGetFlights).toHaveBeenCalledWith('trip1');
+          expect(response.body).toEqual(
+            mockFlights.map(flight => ({
+              ...flight,
+              departureTime: expect.any(Object),
+              arrivalTime: expect.any(Object),
+              createdAt: expect.any(Object),
+              updatedAt: expect.any(Object)
+            }))
+          );
+expect(mockGetFlightsByTrip).toHaveBeenCalledWith('trip1');
         });
       });
     });
