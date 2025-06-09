@@ -3,6 +3,36 @@ import express from 'express';
 import http from 'http';
 import { Timestamp } from 'firebase-admin/firestore';
 
+// Define interfaces
+interface Trip {
+  id: string;
+  tripName: string;
+  location: string;
+  cost: number;
+  startDate: Timestamp;
+  endDate: Timestamp;
+  userId: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+interface Flight {
+  id: string;
+  userId: string;
+  tripId: string;
+  airline: string;
+  flightNumber: string;
+  departureLocation: string;
+  arrivalLocation: string;
+  departureTime: Timestamp;
+  arrivalTime: Timestamp;
+  cost: number;
+  createdAt: Timestamp;
+  stops: any[];
+  isBooked: boolean;
+  updatedAt: Timestamp;
+}
+
 // Mock Firebase Admin SDK
 jest.mock('firebase-admin', () => ({
   initializeApp: jest.fn(),
@@ -11,7 +41,8 @@ jest.mock('firebase-admin', () => ({
   },
   firestore: jest.fn(() => ({
     collection: jest.fn()
-  }))
+  })),
+  apps: []
 }));
 
 // Mock auth middleware
@@ -84,7 +115,7 @@ describe('API Endpoints', () => {
     }
   });
   
-    // Helper function to make requests to our test server
+  // Helper function to make requests to our test server
   const requestWithPort = () => request(`http://localhost:${testPort}`);
   
   // Request helper function
@@ -95,7 +126,6 @@ describe('API Endpoints', () => {
   });
 
   describe('Trips API Endpoints', () => {
-
     describe('GET /api/trips', () => {
       test('should return a list of trips and a 200 status code', () => {
         const mockTrips: Trip[] = [{
@@ -143,7 +173,6 @@ describe('API Endpoints', () => {
           .then(response => {
             expect(response.status).toBe(201);
             expect(response.body).toHaveProperty('id');
-            // Check that addTrip was called with userId and trip data
             expect(mockedAddTrip).toHaveBeenCalledWith(
               'test-user-123',
               expect.objectContaining({
@@ -204,6 +233,7 @@ describe('API Endpoints', () => {
           expect(response.status).toBe(404);
         });
       });
+    });
 
     describe('PATCH /api/trips/:tripId', () => {
       test('should update a trip and return a success message', () => {
@@ -241,7 +271,17 @@ describe('API Endpoints', () => {
 
     describe('DELETE /api/trips/:tripId', () => {
       test('should delete a trip and return a success message', () => {
-        const existingTrip = { id: 'trip1', name: 'To Be Deleted', userId: 'test-user-123' };
+        const existingTrip: Trip = {
+          id: 'trip1',
+          tripName: 'To Be Deleted',
+          location: 'Test Location',
+          cost: 1000,
+          startDate: Timestamp.fromDate(new Date('2025-01-01')),
+          endDate: Timestamp.fromDate(new Date('2025-01-07')),
+          userId: 'test-user-123',
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now()
+        };
         mockedGetTripById.mockResolvedValue(existingTrip);
         mockedDeleteTrip.mockResolvedValue(true);
 
@@ -272,312 +312,83 @@ describe('API Endpoints', () => {
         }];
         
         mockedGetFlights.mockResolvedValue(mockFlights);
-  });
 
-  describe('POST /api/trips', () => {
-    test('should create a new trip and return the new ID with a 201 status code', () => {
-      const newTrip = {
-        tripName: 'Test Trip',
-        location: 'Test Location',
-        cost: 1000,
-        startDate: Timestamp.fromDate(new Date('2025-01-01')),
-        endDate: Timestamp.fromDate(new Date('2025-01-07')),
-        userId: 'test-user-123'
-      };
-      
-      const expectedTrip = {
-        ...newTrip,
-        userId: 'test-user-123'
-      };
-      
-      mockedAddTrip.mockResolvedValue('new-trip-id');
-
-      return request(app)
-        .post('/api/trips')
-        .send(newTrip)
-        .then(response => {
-          expect(response.status).toBe(201);
-          expect(response.body).toHaveProperty('id');
-          // Check that addTrip was called with userId and trip data
-          expect(mockedAddTrip).toHaveBeenCalledWith(
-            'test-user-123',
-            expect.objectContaining({
-              tripName: newTrip.tripName,
-              location: newTrip.location,
-              cost: newTrip.cost
-            })
-          );
-            const queryParams = { originLocationCode: 'LHR', destinationLocationCode: 'CDG', departureDate: '2025-10-20', adults: '1' };
-            mockedSearchFlights.mockResolvedValue(mockFlightData);
-
-            return request(app)
-                .get('/api/amadeus/flights')
-                .query(queryParams)
-                .then(response => {
-                    expect(response.status).toBe(200);
-                    expect(response.body).toEqual(mockFlightData);
-                    expect(mockedSearchFlights).toHaveBeenCalledWith(queryParams);
-                });
+        return request(app).get('/api/trips/trip1/flights').then(response => {
+          expect(response.status).toBe(200);
+          expect(response.body).toEqual(mockFlights);
+          expect(mockedGetFlights).toHaveBeenCalledWith('trip1');
         });
-
-        test('should return a 500 error if the flight service fails', () => {
-            const queryParams = { originLocationCode: 'LHR' };
-            mockedSearchFlights.mockRejectedValue(new Error('Amadeus API failure'));
-            
-            return request(app)
-                .get('/api/amadeus/flights')
-                .query(queryParams)
-                .then(response => {
-                    expect(response.status).toBe(500);
-                    expect(response.body).toEqual({ error: 'Failed to search for flights.' });
-                });
-        });
-    });
-
-    describe('GET /api/amadeus/hotels', () => {
-        test('should call the searchHotelsByCity service and return data', () => {
-            const mockHotelData = { data: [{ type: 'hotel-offers' }] };
-            const queryParams = { cityCode: 'PAR' };
-            mockedSearchHotels.mockResolvedValue(mockHotelData);
-
-            return request(app)
-                .get('/api/amadeus/hotels')
-                .query(queryParams)
-                .then(response => {
-                    expect(response.status).toBe(200);
-                    expect(response.body).toEqual(mockHotelData);
-                    expect(mockedSearchHotels).toHaveBeenCalledWith(queryParams);
-                });
-        });
-    });
-
-    describe('GET /api/amadeus/activities', () => {
-        test('should call the searchActivities service and return data', () => {
-            const mockActivityData = { data: [{ id: '1', type: 'activity' }] };
-            const queryParams = { 
-                latitude: '48.86', 
-                longitude: '2.33' 
-            };
-        
-            // The service should handle string to number conversion
-            mockedSearchActivities.mockResolvedValue(mockActivityData);
-        
-            return request(app)
-                .get('/api/amadeus/activities')
-                .query(queryParams)
-                .then(response => {
-                    expect(response.status).toBe(200);
-                    expect(response.body).toEqual(mockActivityData);
-                    expect(mockedSearchActivities).toHaveBeenCalledWith(queryParams);
-                });
-        });
-    });
-
-  describe('PATCH /api/trips/:tripId', () => {
-    let mockedGetTripById;
-    let mockedUpdateTrip;
-
-    beforeEach(() => {
-    mockedGetTripById = jest.fn();
-    mockedUpdateTrip = jest.fn();
-  });
-
-  afterEach(() => {
-    jest.clearAllMocks();
-  });
-
-  test('should update a trip and return a success message', () => {
-    const existingTrip: Trip = {
-      id: 'trip1',
-      tripName: 'Old Name',
-      location: 'Test Location',
-      cost: 1000,
-      startDate: Timestamp.fromDate(new Date('2025-01-01')),
-      endDate: Timestamp.fromDate(new Date('2025-01-07')),
-      userId: 'test-user-123',
-      createdAt: Timestamp.now(),
-      updatedAt: Timestamp.now()
-    };
-    
-    const updates = {
-      tripName: 'Updated Trip',
-      location: 'Updated Location',
-      cost: 1200
-    };
-    
-    mockedGetTripById.mockResolvedValue(existingTrip);
-    mockedUpdateTrip.mockResolvedValue(true);
-
-    return request(app)
-      .patch('/api/trips/trip1')
-      .send(updates)
-      .then(response => {
-        expect(response.status).toBe(200);
-        expect(response.body).toEqual({ message: 'Trip updated successfully' });
-        expect(mockedUpdateTrip).toHaveBeenCalledWith('trip1', updates);
       });
-  });
-
-  describe('DELETE /api/trips/:tripId', () => {
-  let mockedGetTripById;
-  let mockedDeleteTrip;
-
-  beforeEach(() => {
-    mockedGetTripById = jest.fn();
-    mockedDeleteTrip = jest.fn();
-  });
-
-  afterEach(() => {
-    jest.clearAllMocks();
-  });
-
-  test('should delete a trip and return a success message', () => {
-    const existingTrip = { id: 'trip1', name: 'To Be Deleted', userId: 'test-user-123' };
-    mockedGetTripById.mockResolvedValue(existingTrip);
-    mockedDeleteTrip.mockResolvedValue(true);
-
-    return request(app).delete('/api/trips/trip1').then(response => {
-      expect(response.status).toBe(200);
-      expect(response.body).toEqual({ message: 'Trip deleted successfully' });
-    });
-  });
-});
-
-describe('GET /api/trips/:tripId/flights', () => {
-  let mockedGetFlights;
-
-  beforeEach(() => {
-    mockedGetFlights = jest.fn();
-  });
-
-  afterEach(() => {
-    jest.clearAllMocks();
-  });
-
-  test('should return a list of flights for a given trip', () => {
-    const mockFlights: Flight[] = [{
-      id: 'flight1',
-      userId: 'test-user-123',
-      tripId: 'trip1',
-      airline: 'Test Air',
-      flightNumber: 'TA123',
-      departureLocation: 'LHR',
-      arrivalLocation: 'CDG',
-      departureTime: Timestamp.fromDate(new Date('2025-01-01T10:00:00Z')),
-      arrivalTime: Timestamp.fromDate(new Date('2025-01-01T12:30:00Z')),
-      cost: 200,
-      createdAt: Timestamp.now(),
-      stops: [],
-      isBooked: false,
-      updatedAt: Timestamp.now()
-    }];
-    
-    mockedGetFlights.mockResolvedValue(mockFlights);
-
-    return request(app).get('/api/trips/trip1/flights').then(response => {
-      expect(response.status).toBe(200);
-      expect(response.body).toEqual(mockFlights);
-      expect(mockedGetFlights).toHaveBeenCalledWith('trip1');
     });
   });
 
   describe('Amadeus API Proxy Endpoints', () => {
     describe('GET /api/amadeus/flights', () => {
-      let mockedSearchFlights;
+      test('should call the searchFlights service and return data on success', () => {
+        const mockFlightData = { data: [{ id: 1, type: 'flight-offer' }] };
+        const queryParams = { originLocationCode: 'LHR', destinationLocationCode: 'CDG', departureDate: '2025-10-20', adults: '1' };
+        mockedSearchFlights.mockResolvedValue(mockFlightData);
 
-      beforeEach(() => {
-      mockedSearchFlights = jest.fn();
+        return request(app)
+          .get('/api/amadeus/flights')
+          .query(queryParams)
+          .then(response => {
+            expect(response.status).toBe(200);
+            expect(response.body).toEqual(mockFlightData);
+            expect(mockedSearchFlights).toHaveBeenCalledWith(queryParams);
+          });
+      });
+
+      test('should return a 500 error if the flight service fails', () => {
+        const queryParams = { originLocationCode: 'LHR' };
+        mockedSearchFlights.mockRejectedValue(new Error('Amadeus API failure'));
+        
+        return request(app)
+          .get('/api/amadeus/flights')
+          .query(queryParams)
+          .then(response => {
+            expect(response.status).toBe(500);
+            expect(response.body).toEqual({ error: 'Failed to search for flights.' });
+          });
+      });
     });
 
-    afterEach(() => {
-      jest.clearAllMocks();
+    describe('GET /api/amadeus/hotels', () => {
+      test('should call the searchHotelsByCity service and return data', () => {
+        const mockHotelData = { data: [{ type: 'hotel-offers' }] };
+        const queryParams = { cityCode: 'PAR' };
+        mockedSearchHotels.mockResolvedValue(mockHotelData);
+
+        return request(app)
+          .get('/api/amadeus/hotels')
+          .query(queryParams)
+          .then(response => {
+            expect(response.status).toBe(200);
+            expect(response.body).toEqual(mockHotelData);
+            expect(mockedSearchHotels).toHaveBeenCalledWith(queryParams);
+          });
+      });
     });
 
-    test('should call the searchFlights service and return data on success', () => {
-      const mockFlightData = { data: [{ id: 1, type: 'flight-offer' }] };
-      const queryParams = { originLocationCode: 'LHR', destinationLocationCode: 'CDG', departureDate: '2025-10-20', adults: '1' };
-      mockedSearchFlights.mockResolvedValue(mockFlightData);
-
-      return request(app)
-        .get('/api/amadeus/flights')
-        .query(queryParams)
-        .then(response => {
-          expect(response.status).toBe(200);
-          expect(response.body).toEqual(mockFlightData);
-          expect(mockedSearchFlights).toHaveBeenCalledWith(queryParams);
-        });
-    });
-
-    test('should return a 500 error if the flight service fails', () => {
-      const queryParams = { originLocationCode: 'LHR' };
-      mockedSearchFlights.mockRejectedValue(new Error('Amadeus API failure'));
-      
-      return request(app)
-        .get('/api/amadeus/flights')
-        .query(queryParams)
-        .then(response => {
-          expect(response.status).toBe(500);
-          expect(response.body).toEqual({ error: 'Failed to search for flights.' });
-        });
-    });
-  });
-
-  describe('GET /api/amadeus/hotels', () => {
-    let mockedSearchHotels;
-
-    beforeEach(() => {
-      mockedSearchHotels = jest.fn();
-    });
-
-    afterEach(() => {
-      jest.clearAllMocks();
-    });
-
-    test('should call the searchHotelsByCity service and return data', () => {
-      const mockHotelData = { data: [{ type: 'hotel-offers' }] };
-      const queryParams = { cityCode: 'PAR' };
-      mockedSearchHotels.mockResolvedValue(mockHotelData);
-
-      return request(app)
-        .get('/api/amadeus/hotels')
-        .query(queryParams)
-        .then(response => {
-          expect(response.status).toBe(200);
-          expect(response.body).toEqual(mockHotelData);
-          expect(mockedSearchHotels).toHaveBeenCalledWith(queryParams);
-        });
-    });
-  });
-
-  describe('GET /api/amadeus/activities', () => {
-    let mockedSearchActivities;
-
-    beforeEach(() => {
-      mockedSearchActivities = jest.fn();
-    });
-
-    afterEach(() => {
-      jest.clearAllMocks();
-    });
-
-    test('should call the searchActivities service and return data', () => {
-      const mockActivityData = { data: [{ id: '1', type: 'activity' }] };
-      const queryParams = { 
-        latitude: '48.86', 
-        longitude: '2.33' 
-      };
-  
-      // The service should handle string to number conversion
-      mockedSearchActivities.mockResolvedValue(mockActivityData);
-  
-      return request(app)
-        .get('/api/amadeus/activities')
-        .query(queryParams)
-        .then(response => {
-          expect(response.status).toBe(200);
-          expect(response.body).toEqual(mockActivityData);
-          expect(mockedSearchActivities).toHaveBeenCalledWith(queryParams);
-        });
+    describe('GET /api/amadeus/activities', () => {
+      test('should call the searchActivities service and return data', () => {
+        const mockActivityData = { data: [{ id: '1', type: 'activity' }] };
+        const queryParams = { 
+          latitude: '48.86', 
+          longitude: '2.33' 
+        };
+    
+        mockedSearchActivities.mockResolvedValue(mockActivityData);
+    
+        return request(app)
+          .get('/api/amadeus/activities')
+          .query(queryParams)
+          .then(response => {
+            expect(response.status).toBe(200);
+            expect(response.body).toEqual(mockActivityData);
+            expect(mockedSearchActivities).toHaveBeenCalledWith(queryParams);
+          });
+      });
     });
   });
 });
