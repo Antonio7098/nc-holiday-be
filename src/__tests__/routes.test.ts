@@ -96,9 +96,6 @@ interface Flight {
   updatedAt: Timestamp;
 }
 
-// Firebase Admin SDK is now mocked at the top of the file
-
-// Mock auth middleware
 jest.mock('../authMiddleware', () => ({
   verifyUserToken: (req: any, res: any, next: () => void) => {
     req.user = { uid: 'test-user-123', email: 'test@example.com' };
@@ -166,11 +163,9 @@ beforeEach(() => {
 
 import {
   getTrips,
-  getTripById,
   addTrip,
   updateTripDetails,
   deleteTrip,
-  getFlightsByTrip
 } from '../firestoreService';
 
 import {
