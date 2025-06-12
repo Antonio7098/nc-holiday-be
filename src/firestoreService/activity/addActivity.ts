@@ -1,5 +1,5 @@
 import { firestore } from 'firebase-admin';
-import { db } from '../../../firebaseAdminConfig';
+import { db } from '../../firebaseAdminConfig';
 import { type ActivityData } from '../types';
 import { Timestamp } from 'firebase-admin/firestore';
 

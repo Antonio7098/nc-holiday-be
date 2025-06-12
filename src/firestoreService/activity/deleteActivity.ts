@@ -1,4 +1,4 @@
-import { db } from '../../../firebaseAdminConfig';
+import { db } from '../../firebaseAdminConfig';
 
 export function deleteActivity(activityId: string): Promise<boolean> {
     const activityDocRef = db.collection("activities").doc(activityId);

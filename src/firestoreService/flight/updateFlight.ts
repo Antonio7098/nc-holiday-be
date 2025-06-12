@@ -1,5 +1,5 @@
 import { firestore } from 'firebase-admin';
-import { db } from '../../../firebaseAdminConfig';
+import { db } from '../../firebaseAdminConfig';
 import { type FlightData } from '../types';
 
 export type UpdatableFlightFields = Partial<Omit<FlightData, 'userId' | 'tripId' | 'createdAt' | 'updatedAt'>>;

@@ -1,4 +1,4 @@
-import { db } from '../../../firebaseAdminConfig';
+import { db } from '../../firebaseAdminConfig';
 
 export function deleteTrip(tripId: string): Promise<boolean> {
     const tripDocRef = db.collection("trips").doc(tripId);

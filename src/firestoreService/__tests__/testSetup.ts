@@ -1,7 +1,7 @@
 import { getAuth, UserRecord } from 'firebase-admin/auth';
 import { getFirestore, Timestamp } from 'firebase-admin/firestore';
 import { firestore } from 'firebase-admin';
-import { db, auth } from '../../../firebaseAdminConfig';
+import { db, auth } from '../../firebaseAdminConfig';
 import { 
     type TripData,
     type AccomData,

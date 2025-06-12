@@ -1,5 +1,5 @@
 import { App, getApp, initializeApp } from 'firebase-admin/app';
-import { db } from '../../../firebaseAdminConfig';
+import { db } from '../../firebaseAdminConfig';
 import { type Accom, type Activity, type Flight } from '../types';
 import { DocumentSnapshot, DocumentData } from 'firebase-admin/firestore';
 

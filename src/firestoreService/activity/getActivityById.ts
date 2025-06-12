@@ -1,4 +1,4 @@
-import { db } from '../../../firebaseAdminConfig';
+import { db } from '../../firebaseAdminConfig';
 import { type Activity, type ActivityData } from '../types';
 import { DocumentSnapshot, DocumentData } from 'firebase-admin/firestore';
 

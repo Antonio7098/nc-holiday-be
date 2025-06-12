@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { auth } from '../firebaseAdminConfig';
+import { auth } from './firebaseAdminConfig';
 
 export const verifyUserToken = (req: Request, res: Response, next: NextFunction): Promise<void | Response> => {
   const authHeader = req.headers.authorization;

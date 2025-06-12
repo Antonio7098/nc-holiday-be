@@ -1,5 +1,5 @@
 import { firestore } from 'firebase-admin';
-import { db } from '../../../firebaseAdminConfig';
+import { db } from '../../firebaseAdminConfig';
 import { type TripData } from '../types';
 
 export type UpdatableTripFields = Partial<Omit<TripData, 'userId' | 'createdAt' | 'updatedAt'>>;

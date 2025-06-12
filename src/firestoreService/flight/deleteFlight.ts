@@ -1,4 +1,4 @@
-import { db } from '../../../firebaseAdminConfig';
+import { db } from '../../firebaseAdminConfig';
 
 export function deleteFlight(flightId: string): Promise<boolean> {
     const flightDocRef = db.collection("flights").doc(flightId);

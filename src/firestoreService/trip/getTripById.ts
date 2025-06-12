@@ -1,4 +1,4 @@
-import { db } from '../../../firebaseAdminConfig';
+import { db } from '../../firebaseAdminConfig';
 import { type Trip, type TripData } from '../types';
 import { DocumentSnapshot, DocumentData } from 'firebase-admin/firestore';
 

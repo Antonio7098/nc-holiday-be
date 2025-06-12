@@ -1,4 +1,4 @@
-import { db } from '../../../firebaseAdminConfig';
+import { db } from '../../firebaseAdminConfig';
 import { type Accom, type AccomData} from '../types';
 import { DocumentSnapshot, DocumentData } from 'firebase-admin/firestore';
 

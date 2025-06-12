@@ -1,4 +1,4 @@
-import { db } from '../../../firebaseAdminConfig';
+import { db } from '../../firebaseAdminConfig';
 import { type Flight, type FlightData } from '../types';
 import { DocumentSnapshot, DocumentData } from 'firebase-admin/firestore';
 
