@@ -18,8 +18,8 @@ export interface AccomData {
     name: string;
     location: string;
     cost: number;
-    startDate?: Timestamp;
-    endDate?: Timestamp;
+    startDate: Timestamp;
+    endDate: Timestamp;
     rooms?: number;
     beds?: number;
     stars: number;
@@ -54,8 +54,8 @@ export interface ActivityData {
     userId: string;
     tripId: string,
     location: string;
-    startTime?: Timestamp;
-    endTime?: Timestamp;
+    startTime: Timestamp;
+    endTime: Timestamp;
     description: string;
     cost?: number;
     bookingLink?: string;

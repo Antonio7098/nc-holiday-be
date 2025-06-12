@@ -1,4 +1,4 @@
-// Mock Firebase Admin SDK before any imports
+
 jest.mock('firebase-admin', () => ({
   initializeApp: jest.fn(),
   credential: {
@@ -18,7 +18,6 @@ jest.mock('firebase-admin', () => ({
   apps: []
 }));
 
-// Mock getFirestore and getAuth
 jest.mock('firebase-admin/firestore', () => ({
   getFirestore: jest.fn(() => ({
     collection: jest.fn().mockReturnThis(),
@@ -47,8 +46,11 @@ import request from 'supertest';
 import express from 'express';
 import http from 'http';
 import { Timestamp } from 'firebase-admin/firestore';
+import { getTripById } from '../firestoreService';
+import { getFlightsByTrip } from '../firestoreService';
+import { getAccomsByTrip } from '../firestoreService';
+import { getActivitiesByTrip } from '../firestoreService';
 
-// Create a mock Timestamp that matches the Firebase Timestamp interface
 const createMockTimestamp = (seconds = Math.floor(Date.now() / 1000)) => {
   return {
     seconds,
@@ -105,10 +107,8 @@ jest.mock('../authMiddleware', () => ({
   verifyServiceKey: jest.fn((req, res, next) => next())
 }));
 
-// Import API after mocks
 import api from '../api';
 
-// First, declare the mock variables with type information
 let mockGetTrips: jest.Mock<Promise<Trip[]>, [string]>;
 let mockGetTripById: jest.Mock<Promise<Trip | null>, [string]>;
 let mockAddTrip: jest.Mock<Promise<Trip>, [Omit<Trip, 'id' | 'createdAt' | 'updatedAt'>]>;
@@ -119,7 +119,6 @@ let mockSearchFlights: jest.Mock;
 let mockSearchHotels: jest.Mock;
 let mockSearchActivities: jest.Mock;
 
-// Mock the modules first with jest.mock()
 jest.mock('../firestoreService', () => ({
   getTrips: jest.fn(),
   getTripById: jest.fn(),
@@ -145,11 +144,9 @@ jest.mock('../amadaus/amadeusApi', () => ({
   searchActivities: jest.fn()
 }));
 
-// Import the mocked modules after setting up the mocks
 import * as firestoreService from '../firestoreService';
 import * as amadeusApi from '../amadaus/amadeusApi';
 
-// Assign the mock functions to our variables
 beforeEach(() => {
   mockGetTrips = firestoreService.getTrips as jest.Mock;
   mockGetTripById = firestoreService.getTripById as jest.Mock;
@@ -162,7 +159,6 @@ beforeEach(() => {
   mockSearchHotels = amadeusApi.searchHotelsByCity as jest.Mock;
   mockSearchActivities = amadeusApi.searchActivities as jest.Mock;
   
-  // Reset all mocks before each test
   jest.clearAllMocks();
 });
 
@@ -183,7 +179,6 @@ import {
   searchActivities
 } from '../amadaus/amadeusApi';
 
-// Create typed mocks
 const mockedGetTrips = getTrips as jest.MockedFunction<typeof getTrips>;
 const mockedGetTripById = getTripById as jest.MockedFunction<typeof getTripById>;
 const mockedAddTrip = addTrip as jest.MockedFunction<typeof addTrip>;
@@ -200,12 +195,10 @@ describe('API Endpoints', () => {
   let testPort: number;
 
   beforeAll((done) => {
-    // Create a new Express app for testing
     app = express();
     app.use(express.json());
     app.use(api); // Mount the API routes
     
-    // Start the server on a random available port
     server = http.createServer(app);
     server.listen(0, () => {
       testPort = (server.address() as any).port;
@@ -222,10 +215,8 @@ describe('API Endpoints', () => {
     }
   });
   
-  // Helper function to make requests to our test server
   const requestWithPort = () => request(`http://localhost:${testPort}`);
   
-  // Request helper function
   const makeRequest = () => request(`http://localhost:${testPort}`);
 
   beforeEach(() => {
@@ -521,4 +512,86 @@ expect(mockGetFlightsByTrip).toHaveBeenCalledWith('trip1');
       });
     });
   });
+
+  describe('GET /api/:tripId/itinerary', () => {
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+    });
+
+    const mockGetTripById = jest.fn();
+    const mockGetFlightsByTrip = jest.fn();
+    const mockGetAccomsByTrip = jest.fn();
+    const mockGetActivitiesByTrip = jest.fn();
+    jest.mock('../services/tripService', () => ({
+      getTripById: mockGetTripById,
+    }));
+    jest.mock('../services/flightService', () => ({
+      getFlightsByTrip: mockGetFlightsByTrip,
+    }));
+    jest.mock('../services/accomService', () => ({
+      getAccomsByTrip: mockGetAccomsByTrip,
+    }));
+    jest.mock('../services/activityService', () => ({
+      getActivitiesByTrip: mockGetActivitiesByTrip,
+    }));
+
+    const verifyUserToken = (req: any, res: any, next: () => void) => next();
+
+    const app = express();
+
+    it('should return a structured itinerary for a valid trip ID', async () => {
+        const tripId = 'valid-trip';
+        
+        getTripById.mockResolvedValue({ 
+            id: tripId, 
+            startDate: Timestamp.fromDate(new Date('2025-08-10T00:00:00Z')) 
+        });
+        getFlightsByTrip.mockResolvedValue([
+            { id: 'flight1', type: 'flight' }
+        ]);
+        getAccomsByTrip.mockResolvedValue([
+            { id: 'accom1', type: 'accommodation' }
+        ]);
+        getActivitiesByTrip.mockResolvedValue([]);
+
+        const response = await request(app).get(`/api/${tripId}/itinerary`);
+
+        expect(response.status).toBe(200);
+        expect(response.body).toHaveProperty('day1');
+        expect(response.body.day1).toHaveLength(2); // flight + accommodation
+        expect(getTripById).toHaveBeenCalledWith(tripId);
+        expect(getFlightsByTrip).toHaveBeenCalledWith(tripId);
+    });
+
+    it('should return a 404 error if the trip is not found', async () => {
+
+        const tripId = 'invalid-trip';
+        getTripById.mockResolvedValue(null);
+
+        const response = await request(app).get(`/api/${tripId}/itinerary`);
+
+        expect(response.status).toBe(404);
+        expect(response.body).toEqual({ error: 'Trip not found' });
+    });
+
+    it('should return a 500 error if a service function fails', async () => {
+        const tripId = 'trip-with-error';
+        const errorMessage = 'Database connection failed';
+        getTripById.mockResolvedValue({ 
+            id: tripId, 
+            startDate: Timestamp.fromDate(new Date('2025-08-10T00:00:00Z')) 
+        });
+        getFlightsByTrip.mockRejectedValue(new Error(errorMessage));
+        getAccomsByTrip.mockResolvedValue([]);
+        getActivitiesByTrip.mockResolvedValue([]);
+
+        const response = await request(app).get(`/api/${tripId}/itinerary`);
+
+        expect(response.status).toBe(500);
+        expect(response.body).toEqual({ error: 'Failed to generate itinerary.' });
+    });
+
+  });
+
 });

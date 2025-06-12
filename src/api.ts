@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { verifyUserToken } from './authMiddleware';
+import { Request, Response } from 'express';
 
 import { 
     addTrip, getTripById, getTrips, updateTripDetails, deleteTrip,
@@ -15,6 +16,7 @@ import {
     searchHotelsByCity,
     searchActivities
 } from './amadaus/amadeusApi';
+import { Timestamp } from 'firebase-admin/firestore';
 
 dotenv.config();
 
@@ -27,6 +29,73 @@ const PORT = process.env.PORT || 3001;
 const getUid = (req: express.Request): string => {
   return (req as any).user.uid;
 }
+
+
+const toDate = (timestamp: Timestamp): Date => {
+  return new Date(timestamp.seconds * 1000);
+};
+
+app.get('/api/:tripId/itinerary', verifyUserToken, async (req: Request, res: Response) => {
+  const tripId = req.params.tripId;
+
+  try {
+    const trip = await getTripById(tripId);
+    if (!trip) {
+      return res.status(404).json({ error: 'Trip not found' });
+    }
+    const tripStartDate = toDate(trip.startDate);
+
+    const [flights, accommodations, activities] = await Promise.all([
+      getFlightsByTrip(tripId),
+      getAccomsByTrip(tripId),
+      getActivitiesByTrip(tripId)
+    ]);
+
+    const allEvents = [
+      ...(flights || []).map(flight => ({ 
+        ...flight, 
+        type: 'flight', 
+        eventDate: toDate(flight.departureTime)
+      })),
+      ...(accommodations || []).map(accom => ({ 
+        ...accom, 
+        type: 'accommodation',
+        eventDate: toDate(accom.startDate)
+      })),
+      ...(activities || []).map(activity => ({ 
+        ...activity, 
+        type: 'activity',
+        eventDate: toDate(activity.startTime)
+      }))
+    ];
+
+    allEvents.sort((a, b) => a.eventDate.getTime() - b.eventDate.getTime());
+
+    const itinerary: { [key: string]: any[] } = {};
+
+    allEvents.forEach(event => {
+      const dayNumber = Math.floor(
+        (event.eventDate.getTime() - tripStartDate.getTime()) / (1000 * 60 * 60 * 24)
+      ) + 1;
+      
+      if (dayNumber >= 1) {
+        const dayKey = `day${dayNumber}`;
+        if (!itinerary[dayKey]) {
+          itinerary[dayKey] = [];
+        }
+        itinerary[dayKey].push(event);
+      }
+    });
+
+    res.status(200)
+    res.json(itinerary);
+
+  } catch (error) {
+    console.error(`Failed to generate itinerary for trip ${tripId}:`, error);
+    res.status(500)
+    res.json({ error: 'Failed to generate itinerary.' });
+  }
+});
 
 app.get('/api/trips', verifyUserToken, (req, res) => {
   getTrips(getUid(req))
